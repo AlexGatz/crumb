@@ -6,7 +6,8 @@ use std::{
     net, str,
 };
 
-const MAX_ENV_FILE_SIZE: u64 = 8 * 1024; // 8 KiB Limit for BufReader
+// MAX_ENV_FILE_SIZE should be set to the limit of BufReader, this is 8kb right now.
+const MAX_ENV_FILE_SIZE: u64 = 8 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CompressionType {
@@ -193,8 +194,38 @@ fn from_raw_string(input: &str) -> String {
 mod tests {
     use super::*;
 
+    // Tests are multi-threaded. set_var and remove_var is not thread safe. This is a hack to
+    // ensure that the tests that acquire the lock run serially.
+    use std::sync;
+    static TEST_ENV_LOCK: sync::Mutex<()> = sync::Mutex::new(());
+    fn get_env_lock() -> sync::MutexGuard<'static, ()> {
+        match TEST_ENV_LOCK.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                warn!("Mutex was poisoned! Recovering...");
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    fn clear_env_vars() {
+        let vars = [
+            "CRUMB_HOST",
+            "CRUMB_PORT",
+            "CRUMB_COMPRESSION_TYPE",
+            "CRUMB_RELIABLE",
+            "CRUMB_PEM_PATH",
+            "CRUMB_PROTO_PATH",
+        ];
+
+        for var in vars.iter() {
+            env::remove_var(var);
+        }
+    }
+
     #[test]
     fn env_file_full() {
+        let _lock = get_env_lock();
         // .test-env-full
         // CRUMB_HOST="1.2.3.4"
         // CRUMB_PORT=55555
@@ -202,6 +233,7 @@ mod tests {
         // CRUMB_RELIABLE=false
         // CRUMB_PEM_PATH="its/just/a/test.pem"
         // CRUMB_PROTO_PATH="testing/tests/stuff.proto"
+        clear_env_vars();
         let config =
             Config::from_env(Some("/home/neo/repos/crumb/src/util/.test-env-full")).unwrap();
         assert_eq!(config.host, "1.2.3.4".to_owned());
@@ -210,19 +242,12 @@ mod tests {
         assert_eq!(config.reliable, false);
         assert_eq!(config.pem_path, "its/just/a/test.pem".to_owned());
         assert_eq!(config.proto_path, "testing/tests/stuff.proto".to_owned());
-
-        // Cleanup env vars
-        env::remove_var("CRUMB_HOST");
-        env::remove_var("CRUMB_PORT");
-        env::remove_var("CRUMB_COMPRESSION_TYPE");
-        env::remove_var("CRUMB_RELIABLE");
-        env::remove_var("CRUMB_PEM_PATH");
-        env::remove_var("CRUMB_PROTO_PATH");
     }
 
     #[test]
     #[should_panic(expected = "Invalid IP address provided for CRUMB_HOST: 1234")]
     fn env_file_full_bad() {
+        let _lock = get_env_lock();
         // .test-env-full-bad
         // CRUMB_HOST=1234
         // CRUMB_PORT="woops"
@@ -230,6 +255,7 @@ mod tests {
         // CRUMB_RELIABLE=farse
         // CRUMB_PEM_PATH=1
         // CRUMB_PROTO_PATH=1000
+        clear_env_vars();
         let config =
             Config::from_env(Some("/home/neo/repos/crumb/src/util/.test-env-full-bad")).unwrap();
         assert_eq!(config.host, "127.0.0.1".to_owned());
@@ -238,18 +264,11 @@ mod tests {
         assert_eq!(config.reliable, true);
         assert_eq!(config.pem_path, "cert.pem".to_owned());
         assert_eq!(config.proto_path, "message.proto".to_owned());
-
-        // Cleanup env vars
-        env::remove_var("CRUMB_HOST");
-        env::remove_var("CRUMB_PORT");
-        env::remove_var("CRUMB_COMPRESSION_TYPE");
-        env::remove_var("CRUMB_RELIABLE");
-        env::remove_var("CRUMB_PEM_PATH");
-        env::remove_var("CRUMB_PROTO_PATH");
     }
 
     #[test]
     fn env_file_full_with_comments() {
+        let _lock = get_env_lock();
         // .test-env-full-comments
         // # This is a comment
         // CRUMB_HOST="1.2.3.4" # This is also a comment
@@ -259,6 +278,7 @@ mod tests {
         // # The comment in the path should be ignored
         // CRUMB_PEM_PATH="#its/just/a/test.pem" # And so should this "#"
         // CRUMB_PROTO_PATH="testing/tests/stuff.proto"
+        clear_env_vars();
         let config =
             Config::from_env(Some("/home/neo/repos/crumb/src/util/.test-env-full")).unwrap();
         assert_eq!(config.host, "1.2.3.4".to_owned());
@@ -267,30 +287,16 @@ mod tests {
         assert_eq!(config.reliable, false);
         assert_eq!(config.pem_path, "its/just/a/test.pem".to_owned());
         assert_eq!(config.proto_path, "testing/tests/stuff.proto".to_owned());
-
-        // Cleanup env vars
-        env::remove_var("CRUMB_HOST");
-        env::remove_var("CRUMB_PORT");
-        env::remove_var("CRUMB_COMPRESSION_TYPE");
-        env::remove_var("CRUMB_RELIABLE");
-        env::remove_var("CRUMB_PEM_PATH");
-        env::remove_var("CRUMB_PROTO_PATH");
     }
 
     #[test]
     #[should_panic(
         expected = "CRUMB_PROTO_PATH not set or invalid. A .proto file is required. Error: environment variable not found"
     )]
-    // Config {
-    //             host: "[::]".to_string(),
-    //             port: 50505,
-    //             compression_type: CompressionType::default(),
-    //             reliable: true,
-    //             pem_path: "cert.pem".to_string(),
-    //             proto_path: "message.proto".to_string(),
-    //         }
 
     fn env_file_empty() {
+        let _lock = get_env_lock();
+        clear_env_vars();
         let config =
             Config::from_env(Some("/home/neo/repos/crumb/src/util/.test-env-empty")).unwrap();
         assert_eq!(config.host, "127.0.0.1".to_string());
@@ -306,6 +312,8 @@ mod tests {
         expected = "CRUMB_PROTO_PATH not set or invalid. A .proto file is required. Error: environment variable not found"
     )]
     fn env_file_missing() {
+        let _lock = get_env_lock();
+        clear_env_vars();
         let config = Config::from_env(None).unwrap();
         assert_eq!(config.host, "127.0.0.1".to_string());
         assert_eq!(config.port, 50505);

@@ -9,7 +9,6 @@ pub struct Client {
 impl Client {
     pub fn init(conf: &Config) -> io::Result<Client> {
         let addr = format!("{}:{}", conf.host, conf.port);
-        // Apparenting this is correct?!
         let socket = UdpSocket::bind("[::]:0")?;
         socket.connect(&addr)?;
 
@@ -35,7 +34,6 @@ pub struct Server {
 
 impl Server {
     pub fn init(conf: &Config) -> io::Result<Server> {
-        // Support IPv4 and IPv6 on Linux
         let addr = format!("[::]:{}", conf.port);
         let socket = UdpSocket::bind(&addr)?;
 
@@ -57,7 +55,7 @@ impl Server {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Import the Client, Server, and Config structs
+    use super::*;
     use std::thread;
     use std::time::Duration;
 
@@ -81,7 +79,6 @@ mod tests {
             let message = String::from_utf8_lossy(&buffer[..bytes_received]);
             assert_eq!(message, "Hello, Server!");
 
-            // Send response back to the client
             server
                 .send_to(b"Hello, Client!", client_addr)
                 .expect("Failed to send response");
@@ -92,7 +89,6 @@ mod tests {
         // Allow the server some time to start
         thread::sleep(Duration::from_millis(100));
 
-        // Configure and start the client
         let client_conf = Config {
             host: "127.0.0.1".to_string(),
             port: 8080,
@@ -100,11 +96,8 @@ mod tests {
         };
 
         let client = Client::init(&client_conf).expect("Failed to initialize client");
-
-        // Send a message to the server
         client.send(b"Hello, Server!").expect("Failed to send data");
 
-        // Prepare a buffer for the server's response
         let mut buffer = [0u8; 1024];
         let bytes_received = client
             .receive(&mut buffer)
@@ -115,7 +108,6 @@ mod tests {
 
         client.close();
 
-        // Wait for the server thread to complete
         server_handle.join().expect("Server thread panicked");
 
         Ok(())
