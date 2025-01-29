@@ -1,0 +1,6 @@
+CRUMB_HOST="1.2.3.4"
+CRUMB_PORT=55555
+CRUMB_COMPRESSION_TYPE=gzip
+CRUMB_RELIABLE=false
+CRUMB_PEM_PATH="its/just/a/test.pem"
+CRUMB_PROTO_PATH="testing/tests/stuff.proto"

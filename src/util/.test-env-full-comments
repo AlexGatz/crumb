@@ -1,0 +1,8 @@
+# This is a comment
+CRUMB_HOST="1.2.3.4" # This is also a comment
+CRUMB_PORT=55555
+CRUMB_COMPRESSION_TYPE=gzip
+CRUMB_RELIABLE=false
+# The common in the path should be ignored
+CRUMB_PEM_PATH="#its/just/a/test.pem" # And so should this "#"
+CRUMB_PROTO_PATH="testing/tests/stuff.proto"
