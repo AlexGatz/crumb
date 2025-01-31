@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 rustls = "0.23.21"
 log = "0.4.25"
+openssl = "0.10.69"
 
 # Used for examples
 [dev-dependencies]
